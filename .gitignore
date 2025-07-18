@@ -1,0 +1,46 @@
+# ======================================================
+# DEFAULT SPRING BOOT .GITIGNORE
+# ======================================================
+# Ignore the properties file that contains passwords and API keys.
+src/main/resources/application.properties
+
+# Compiled output
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+build/
+
+# IDE-specific files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse/STS specific
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# Maven files
+.mvn/
+mvnw
+mvnw.cmd
+
+# Log files
+*.log
+logs/
+
+# ======================================================
+# === CRITICAL FOR SECURITY - DO NOT REMOVE          ===
+# ======================================================
+# Ignore the properties file that contains passwords and API keys.
+src/main/resources/application.properties
