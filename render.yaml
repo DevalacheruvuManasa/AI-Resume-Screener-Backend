@@ -1,0 +1,58 @@
+# This file tells Render how to build and deploy your services.
+# It defines both your backend API and your frontend UI.
+
+services:
+  # ====== Service 1: The Spring Boot Backend API ======
+  - type: web
+    name: resume-screener-api # You can change this name
+    # IMPORTANT: Set the runtime to 'java' to ensure the correct build environment.
+    runtime: java
+    plan: free # Specifies the free instance type
+    # Automatically deploy when you push to the 'main' branch
+    autoDeploy: true 
+    # The region where the service will be hosted
+    region: ohio 
+    
+    # Build and Start commands
+    buildCommand: "./mvnw clean install"
+    startCommand: "java -jar target/gemini-0.0.1-SNAPSHOT.jar" # IMPORTANT: Make sure this JAR name matches your pom.xml
+    
+    # Define the environment variables for the backend
+    envVars:
+      - key: SERVER_PORT
+        value: 8080
+      - key: SPRING_DATA_MONGODB_URI
+        # This 'sync: false' tells Render not to share this value with other services
+        sync: false 
+        # This value will be pulled from the Secret File we create in the Render dashboard
+        fromSecretFile:
+          name: spring-backend-secrets
+          key: MONGO_DB_URI
+      - key: GROQ_API_KEY
+        sync: false
+        fromSecretFile:
+          name: spring-backend-secrets
+          key: GROQ_API_KEY
+      - key: GROQ_API_URL
+        value: https://api.groq.com/openai/v1/chat/completions
+      - key: SPRING_APPLICATION_NAME
+        value: resumescreener
+
+  # ====== Service 2: The React Frontend Static Site ======
+  - type: static
+    name: resume-screener-ui # You can change this name
+    # The GitHub repository for your frontend code
+    repo: https://github.com/DevalacheruvuManasa/AI-Resume-Screener-Frontend # IMPORTANT: Use YOUR frontend repo URL
+    plan: free
+    autoDeploy: true
+    region: ohio
+    
+    # Build and Publish settings for a Vite/React app
+    buildCommand: "npm install && npm run build"
+    publishDir: "dist"
+    
+    # The rewrite rule to proxy API calls to our backend service
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: /api/*
