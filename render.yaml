@@ -32,7 +32,7 @@ services:
   # -----------------
   # The React Frontend Service
   # -----------------
-  - type: static site # It's a static site (HTML, CSS, JS)
+  - type:  static_site # It's a static site (HTML, CSS, JS)
     name: resume-screener-frontend
     repo: https://github.com/DevalacheruvuManasa/AI-Resume-Screener-Frontend # <-- EDIT THIS
     plan: free # Use the free instance type
