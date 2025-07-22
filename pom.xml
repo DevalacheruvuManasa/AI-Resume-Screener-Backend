@@ -13,7 +13,7 @@
 
     <!-- Your project's unique coordinates -->
     <groupId>com.resumescreener</groupId>
-    <artifactId>gemini</artifactId> <!-- The name 'gemini' is a remnant of our first attempt, but it's okay to leave it -->
+    <artifactId>resumescanner</artifactId> <!-- The name 'gemini' is a remnant of our first attempt, but it's okay to leave it -->
     <version>0.0.1-SNAPSHOT</version>
     <name>resumescreener</name>
     <description>AI-Powered Resume Screener Project</description>
