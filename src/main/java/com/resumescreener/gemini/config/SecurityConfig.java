@@ -11,6 +11,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy; // Important import
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -26,8 +27,6 @@ public class SecurityConfig {
 
     @Autowired
     private MongoUserDetailsService userDetailsService;
-
-    // We no longer need the @Value field here.
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -45,59 +44,46 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource(null))) // Pass null, as @Value will provide it
+            .cors(cors -> cors.configurationSource(corsConfigurationSource(null)))
             .csrf(csrf -> csrf.disable())
+            
+            // --- THIS IS THE KEY CHANGE ---
+            // Tell Spring Security to NEVER create or use sessions.
+            // This forces it to act like a true stateless REST API.
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) ->
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
                 )
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/auth/me").permitAll()
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().permitAll()
-            )
-            .formLogin(formLogin -> formLogin
-                .loginProcessingUrl("/api/auth/login")
-                .successHandler((request, response, authentication) -> {
-                    response.setStatus(HttpServletResponse.SC_OK);
-                    response.getWriter().write("{\"message\": \"Login successful!\"}");
-                    response.getWriter().flush();
-                })
-                .failureHandler((request, response, exception) -> {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid username or password");
-                })
-            )
-            .logout(logout -> logout
-                .logoutUrl("/api/auth/logout")
-                .logoutSuccessHandler((request, response, authentication) ->
-                    response.setStatus(HttpServletResponse.SC_OK)
-                )
-                .deleteCookies("JSESSIONID")
-                .invalidateHttpSession(true)
+                // Allow all requests to the authentication endpoints
+                .requestMatchers("/api/auth/**").permitAll()
+                // All other requests must be authenticated
+                .anyRequest().authenticated()
             );
+        
+        // When using STATELESS, we do not configure formLogin or logout,
+        // because there are no sessions to manage. Authentication will be handled
+        // by other means in a more advanced setup (like JWTs). For this project,
+        // this setup is sufficient to prove the concept.
 
         return http.build();
     }
     
-    /**
-     * This bean provides the global CORS configuration.
-     * It now accepts the frontend URL as a parameter, which is injected by Spring.
-     * We provide a default value for local development.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
         @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
         
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // This configuration now safely uses the injected value.
+        // This configuration uses both the deployed URL and the local dev URL
         configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173"));
         
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+        // AllowCredentials is less relevant in a stateless model but doesn't hurt
         configuration.setAllowCredentials(true);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
