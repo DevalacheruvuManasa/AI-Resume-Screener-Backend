@@ -120,7 +120,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // Allow requests from your React development server
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        String frontendUrl = "https://ai-resume-screener-frontend.onrender.com";
+        configuration.setAllowedOrigins(List.of("http://localhost:5173",frontendUrl));
         // Allow all standard HTTP methods
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // Allow specific headers required for modern web apps
