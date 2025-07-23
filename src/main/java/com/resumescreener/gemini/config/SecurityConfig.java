@@ -27,9 +27,7 @@ public class SecurityConfig {
     @Autowired
     private MongoUserDetailsService userDetailsService;
 
-    // We will inject the frontend URL from an environment variable for flexibility
-    @Value("${frontend.origin.url}")
-    private String frontendOriginUrl;
+    // We no longer need the @Value field here.
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -47,7 +45,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .cors(cors -> cors.configurationSource(corsConfigurationSource(null))) // Pass null, as @Value will provide it
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) ->
@@ -55,17 +53,10 @@ public class SecurityConfig {
                 )
             )
             .authorizeHttpRequests(auth -> auth
-                // --- THIS IS THE CRITICAL NEW LINE ---
-                // Always permit CORS preflight OPTIONS requests without authentication.
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                
-                // Your existing public endpoints
                 .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").permitAll()
-                
-                // All other API endpoints require authentication
                 .requestMatchers("/api/**").authenticated()
-                
                 .anyRequest().permitAll()
             )
             .formLogin(formLogin -> formLogin
@@ -91,12 +82,19 @@ public class SecurityConfig {
         return http.build();
     }
     
+    /**
+     * This bean provides the global CORS configuration.
+     * It now accepts the frontend URL as a parameter, which is injected by Spring.
+     * We provide a default value for local development.
+     */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+        @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
+        
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // This configuration uses the @Value injected frontend URL
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", this.frontendOriginUrl));
+        // This configuration now safely uses the injected value.
+        configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173"));
         
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
