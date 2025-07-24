@@ -88,7 +88,7 @@ public class SecurityConfig {
         @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
         
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173", "https://ai-resume-screener-frontend.onrender.com" ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
