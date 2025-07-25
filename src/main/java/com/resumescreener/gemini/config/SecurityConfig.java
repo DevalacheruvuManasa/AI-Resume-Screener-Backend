@@ -43,26 +43,24 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource(null)))
+            // Use the global CORS configuration defined in the corsConfigurationSource bean
+            .cors(cors -> cors.configurationSource(corsConfigurationSource(null))) // The value will be injected by Spring
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) ->
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
                 )
             )
-            // NOTE: We are NOT setting sessionManagement to STATELESS anymore.
-            // We are using the default, which is stateful (IF_REQUIRED).
+            // Use the default stateful session management
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll() // Registration is public
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()    // Login endpoint is also public
-                .anyRequest().authenticated() // All other requests require authentication
+                .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                .anyRequest().authenticated()
             )
-            // Re-enable formLogin to handle session creation
+            // Use formLogin to handle session creation and authentication
             .formLogin(formLogin -> formLogin
                 .loginProcessingUrl("/api/auth/login")
                 .successHandler((request, response, authentication) -> {
                     response.setStatus(HttpServletResponse.SC_OK);
-                    // We don't need to return the username, the session cookie is enough
                     response.getWriter().write("{\"message\": \"Login successful!\"}");
                     response.getWriter().flush();
                 })
@@ -70,7 +68,7 @@ public class SecurityConfig {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid username or password");
                 })
             )
-            // Re-enable logout to handle session destruction
+            // Use logout to handle session destruction
             .logout(logout -> logout
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((request, response, authentication) ->
@@ -83,12 +81,21 @@ public class SecurityConfig {
         return http.build();
     }
     
+    /**
+     * This bean provides the global CORS configuration.
+     * It accepts the frontend URL as a parameter, injected by Spring from environment variables.
+     * A default value is provided for local development.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
         @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
         
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173", "https://ai-resume-screener-frontend.onrender.com" ));
+        
+        // This configuration safely uses the injected value for deployed environments
+        // and the default value for local development.
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", frontendOriginUrl));
+        
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
