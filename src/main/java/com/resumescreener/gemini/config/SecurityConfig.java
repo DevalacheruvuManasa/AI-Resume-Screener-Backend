@@ -14,6 +14,8 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.session.web.http.CookieSerializer; // <-- New Import
+import org.springframework.session.web.http.DefaultCookieSerializer; // <-- New Import
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -40,23 +42,37 @@ public class SecurityConfig {
         return authenticationManagerBuilder.build();
     }
 
+    // --- THIS IS THE NEW, CRITICAL BEAN FOR DEPLOYMENT ---
+    /**
+     * This bean configures how the session cookie is created. It's essential for
+     * making login sessions work across different subdomains (like your frontend and backend on Render).
+     */
+    @Bean
+    public CookieSerializer cookieSerializer() {
+        DefaultCookieSerializer serializer = new DefaultCookieSerializer();
+        // This tells the browser that the cookie is valid for any subdomain of .onrender.com
+        // It allows the cookie set by the backend to be sent by the frontend.
+        serializer.setDomainNamePattern("^.+?\\.onrender\\.com$"); 
+        // These settings are required for modern browsers to accept cross-site cookies.
+        serializer.setSameSite("None"); 
+        serializer.setUseSecureCookie(true); // Ensures the cookie is only sent over HTTPS
+        return serializer;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Use the global CORS configuration defined in the corsConfigurationSource bean
-            .cors(cors -> cors.configurationSource(corsConfigurationSource(null))) // The value will be injected by Spring
+            .cors(cors -> cors.configurationSource(corsConfigurationSource(null)))
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) ->
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
                 )
             )
-            // Use the default stateful session management
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                 .anyRequest().authenticated()
             )
-            // Use formLogin to handle session creation and authentication
             .formLogin(formLogin -> formLogin
                 .loginProcessingUrl("/api/auth/login")
                 .successHandler((request, response, authentication) -> {
@@ -68,7 +84,6 @@ public class SecurityConfig {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid username or password");
                 })
             )
-            // Use logout to handle session destruction
             .logout(logout -> logout
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((request, response, authentication) ->
@@ -81,21 +96,12 @@ public class SecurityConfig {
         return http.build();
     }
     
-    /**
-     * This bean provides the global CORS configuration.
-     * It accepts the frontend URL as a parameter, injected by Spring from environment variables.
-     * A default value is provided for local development.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
         @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
         
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // This configuration safely uses the injected value for deployed environments
-        // and the default value for local development.
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", frontendOriginUrl));
-        
+        configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
