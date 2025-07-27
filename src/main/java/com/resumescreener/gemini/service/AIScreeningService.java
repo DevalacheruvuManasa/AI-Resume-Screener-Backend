@@ -77,6 +77,12 @@ public class AIScreeningService {
 
         JsonNode rootNode = objectMapper.readTree(responseJsonString);
         String jsonContent = rootNode.path("choices").get(0).path("message").path("content").asText();
+     // --- THIS IS THE CRITICAL DEBUGGING STEP ---
+        System.out.println("==========================================");
+        System.out.println("RAW AI RESPONSE ON RENDER:");
+        System.out.println(jsonContent);
+        System.out.println("==========================================");
+        // ---------------------------------------------
         JsonNode aiResponse;
         try {
             aiResponse = objectMapper.readTree(jsonContent);
