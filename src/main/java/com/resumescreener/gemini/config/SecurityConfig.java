@@ -14,13 +14,15 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.session.web.http.CookieSerializer; // <-- New Import
-import org.springframework.session.web.http.DefaultCookieSerializer; // <-- New Import
+import org.springframework.session.web.http.CookieSerializer;
+import org.springframework.session.web.http.DefaultCookieSerializer;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+
+import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @EnableWebSecurity
@@ -42,19 +44,17 @@ public class SecurityConfig {
         return authenticationManagerBuilder.build();
     }
 
-    // --- THIS IS THE NEW, CRITICAL BEAN FOR DEPLOYMENT ---
     /**
-     * This bean configures how the session cookie is created. It's essential for
-     * making login sessions work across different subdomains (like your frontend and backend on Render).
+     * This bean is essential for making login sessions work across different subdomains
+     * (e.g., your frontend and backend on Render).
      */
     @Bean
     public CookieSerializer cookieSerializer() {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
-        // This tells the browser that the cookie is valid for any subdomain of .onrender.com
-        // It allows the cookie set by the backend to be sent by the frontend.
-        serializer.setDomainNamePattern("^.+?\\.onrender\\.com$"); 
-        // These settings are required for modern browsers to accept cross-site cookies.
-        serializer.setSameSite("None"); 
+        // This regex allows the cookie to be shared between your ...frontend.onrender.com
+        // and ...backend.onrender.com domains. For local dev, it has no effect.
+        serializer.setDomainNamePattern("^.+?\\.onrender\\.com$");
+        serializer.setSameSite("None"); // Required for cross-site cookies
         serializer.setUseSecureCookie(true); // Ensures the cookie is only sent over HTTPS
         return serializer;
     }
@@ -62,7 +62,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource(null)))
+            // Use the global CORS configuration defined in the corsConfigurationSource bean
+            .cors(withDefaults())
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) ->
@@ -70,15 +71,17 @@ public class SecurityConfig {
                 )
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                // Allow CORS preflight requests
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Allow public access to registration and login
+                .requestMatchers("/api/auth/**").permitAll()
+                // ALL OTHER requests must be authenticated
                 .anyRequest().authenticated()
             )
             .formLogin(formLogin -> formLogin
                 .loginProcessingUrl("/api/auth/login")
                 .successHandler((request, response, authentication) -> {
                     response.setStatus(HttpServletResponse.SC_OK);
-                    response.getWriter().write("{\"message\": \"Login successful!\"}");
-                    response.getWriter().flush();
                 })
                 .failureHandler((request, response, exception) -> {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid username or password");
@@ -101,7 +104,8 @@ public class SecurityConfig {
         @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
         
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(frontendOriginUrl, "http://localhost:5173"));
+        // Allow requests from your local React dev server and your deployed frontend
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", frontendOriginUrl));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
