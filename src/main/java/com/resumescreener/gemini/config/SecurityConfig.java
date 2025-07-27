@@ -14,12 +14,11 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.session.web.http.CookieSerializer;
-import org.springframework.session.web.http.DefaultCookieSerializer;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.springframework.security.config.Customizer.withDefaults;
@@ -44,38 +43,18 @@ public class SecurityConfig {
         return authenticationManagerBuilder.build();
     }
 
-    /**
-     * This bean is essential for making login sessions work across different subdomains
-     * (e.g., your frontend and backend on Render).
-     */
-    @Bean
-    public CookieSerializer cookieSerializer() {
-        DefaultCookieSerializer serializer = new DefaultCookieSerializer();
-        // This regex allows the cookie to be shared between your ...frontend.onrender.com
-        // and ...backend.onrender.com domains. For local dev, it has no effect.
-        serializer.setDomainNamePattern("^.+?\\.onrender\\.com$");
-        serializer.setSameSite("None"); // Required for cross-site cookies
-        serializer.setUseSecureCookie(true); // Ensures the cookie is only sent over HTTPS
-        return serializer;
-    }
+    // WE ARE REMOVING THE COMPLEX COOKIE SERIALIZER BEAN
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Use the global CORS configuration defined in the corsConfigurationSource bean
+            // Use the global CORS configuration defined below
             .cors(withDefaults())
             .csrf(csrf -> csrf.disable())
-            .exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint((request, response, authException) ->
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
-                )
-            )
             .authorizeHttpRequests(auth -> auth
-                // Allow CORS preflight requests
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Allow public access to registration and login
+                // Allow public access to registration and login endpoints
                 .requestMatchers("/api/auth/**").permitAll()
-                // ALL OTHER requests must be authenticated
+                // All other requests must be authenticated
                 .anyRequest().authenticated()
             )
             .formLogin(formLogin -> formLogin
@@ -104,10 +83,13 @@ public class SecurityConfig {
         @Value("${frontend.origin.url:http://localhost:5173}") String frontendOriginUrl) {
         
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow requests from your local React dev server and your deployed frontend
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", frontendOriginUrl));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+        
+        // This configuration uses both the deployed URL and the local dev URL
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", frontendOriginUrl));
+        
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // Allow all headers for maximum compatibility
+        configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
