@@ -9,10 +9,10 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "candidates")
 public class Candidate {
     @Id
- private String id;
+    private String id;
     
-    // --- ADD THIS NEW FIELD ---
-    private String userId; // This will store the ID of the User who submitted this.
+    // This field links the screening to a specific user.
+    private String userId; 
     
     private String originalFileName;
     private String resumeText;

@@ -8,6 +8,6 @@ import java.util.List;
 
 @Repository
 public interface CandidateRepository extends MongoRepository<Candidate, String> {
-    List<Candidate> findAllByOrderByScoreDesc();
+    // Finds all candidates for a specific user, ordered by score.
     List<Candidate> findByUserIdOrderByScoreDesc(String userId);
 }
