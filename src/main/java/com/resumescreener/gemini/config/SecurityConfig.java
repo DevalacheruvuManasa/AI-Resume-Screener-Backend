@@ -1,13 +1,13 @@
 package com.resumescreener.gemini.config;
 
 import com.resumescreener.gemini.service.MongoUserDetailsService;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration; // <-- New Import
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider; // <-- New Import
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -28,32 +28,37 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // MongoUserDetailsService is used automatically by the AuthenticationManager,
-    // so we don't need to @Autowired it here directly.
-    
+    @Autowired
+    private MongoUserDetailsService userDetailsService;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     /**
-     * THIS IS THE MISSING BEAN.
-     * This bean is required by your AuthController to manually handle the login process.
-     * This is the modern, correct way to expose the AuthenticationManager.
+     * THIS BEAN IS THE CORE OF THE LOGIN FIX.
+     * It creates an AuthenticationProvider that explicitly tells Spring Security:
+     * 1. How to find users (using our MongoUserDetailsService).
+     * 2. How to check passwords (using our PasswordEncoder).
      */
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
     }
 
-    /**
-     * This bean is the most critical part for a successful deployment.
-     * It configures the session cookie to work across different subdomains.
-     */
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+        return authConfig.getAuthenticationManager();
+    }
+
     @Bean
     public CookieSerializer cookieSerializer() {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
-        serializer.setSameSite("None"); 
+        serializer.setSameSite("None");
         serializer.setUseSecureCookie(true);
         return serializer;
     }
@@ -63,15 +68,14 @@ public class SecurityConfig {
         http
             .cors(withDefaults())
             .csrf(csrf -> csrf.disable())
+            // THIS LINE REGISTERS our authentication strategy with the security chain.
+            .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
-                // Allow public access to all registration and login endpoints.
                 .requestMatchers("/api/auth/**").permitAll()
-                // Require authentication for ALL other requests.
                 .anyRequest().authenticated()
             );
-            // We DO NOT configure .formLogin() or .logout() because we are
-            // handling these manually and explicitly in our AuthController.
 
+        // We are using explicit endpoints in AuthController, so no formLogin() or default handlers are needed.
         return http.build();
     }
     
