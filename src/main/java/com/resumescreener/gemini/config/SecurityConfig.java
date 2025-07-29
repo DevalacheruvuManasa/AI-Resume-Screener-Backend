@@ -5,8 +5,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod; // <-- Make sure this import is present
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider; // <-- New Import
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -37,10 +38,8 @@ public class SecurityConfig {
     }
 
     /**
-     * THIS BEAN IS THE CORE OF THE LOGIN FIX.
-     * It creates an AuthenticationProvider that explicitly tells Spring Security:
-     * 1. How to find users (using our MongoUserDetailsService).
-     * 2. How to check passwords (using our PasswordEncoder).
+     * This bean creates the "strategy" for how to authenticate users,
+     * connecting our MongoDB user service and password encoder.
      */
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -50,11 +49,18 @@ public class SecurityConfig {
         return authProvider;
     }
 
+    /**
+     * This bean is required by our AuthController to manually trigger the authentication process.
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
 
+    /**
+     * This bean is essential for making login sessions work on the deployed Render site
+     * by correctly configuring cross-domain cookies.
+     */
     @Bean
     public CookieSerializer cookieSerializer() {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
@@ -68,14 +74,21 @@ public class SecurityConfig {
         http
             .cors(withDefaults())
             .csrf(csrf -> csrf.disable())
-            // THIS LINE REGISTERS our authentication strategy with the security chain.
+            // Register our custom authentication provider with the security chain.
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
+                // --- THIS IS THE KEY FIX FOR THE 403 FORBIDDEN ERROR ---
+                // Allow browsers to make pre-flight OPTIONS requests without authentication.
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                
+                // Allow public access to all authentication-related endpoints.
                 .requestMatchers("/api/auth/**").permitAll()
+                
+                // All other requests must be authenticated.
                 .anyRequest().authenticated()
             );
 
-        // We are using explicit endpoints in AuthController, so no formLogin() or default handlers are needed.
+        // We do not use .formLogin() because our AuthController handles login explicitly.
         return http.build();
     }
     
