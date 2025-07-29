@@ -1,4 +1,3 @@
-// File: src/main/java/com/resumescreener/gemini/service/AIScreeningService.java
 package com.resumescreener.gemini.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -10,6 +9,8 @@ import com.resumescreener.gemini.repository.UserRepository;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -24,6 +25,8 @@ import java.util.Map;
 
 @Service
 public class AIScreeningService {
+
+    private static final Logger log = LoggerFactory.getLogger(AIScreeningService.class);
 
     @Autowired
     private CandidateRepository candidateRepository;
@@ -50,7 +53,7 @@ public class AIScreeningService {
             .orElseThrow(() -> new RuntimeException("Authenticated user not found."));
             
         String resumeText = extractTextFromPdf(resumeFile);
-        String systemPrompt = "You are an expert HR assistant... Respond ONLY with a valid JSON object with keys: 'candidateName', 'score', and 'feedback'.";
+        String systemPrompt = "You are an expert HR assistant. Respond ONLY with a valid JSON object with keys: 'candidateName', 'score', and 'feedback'.";
         String userPrompt = "JOB DESCRIPTION:\n" + jobDescription + "\n\nRESUME TEXT:\n" + resumeText;
 
         Map<String, Object> requestBody = Map.of(
@@ -68,13 +71,26 @@ public class AIScreeningService {
 
         JsonNode rootNode = objectMapper.readTree(responseJsonString);
         String jsonContent = rootNode.path("choices").get(0).path("message").path("content").asText();
-        JsonNode aiResponse = objectMapper.readTree(jsonContent);
+        
+        // --- THIS IS THE CRITICAL DEBUGGING LOG ---
+        log.info("--- RAW AI RESPONSE ON RENDER ---");
+        log.info(jsonContent);
+        log.info("---------------------------------");
+        
+        JsonNode aiResponse;
+        try {
+            aiResponse = objectMapper.readTree(jsonContent);
+        } catch (IOException e) {
+            throw new IOException("AI returned invalid JSON. Response was: " + jsonContent, e);
+        }
 
         Candidate candidate = new Candidate();
-        candidate.setUserId(user.getId()); // <-- Associate with user
+        candidate.setUserId(user.getId());
         candidate.setOriginalFileName(resumeFile.getOriginalFilename());
         candidate.setResumeText(resumeText);
         candidate.setJobDescription(jobDescription);
+        
+        // Defensive data mapping
         candidate.setCandidateName(aiResponse.path("candidateName").asText("N/A"));
         candidate.setScore(aiResponse.path("score").asInt(0));
         candidate.setFeedback(aiResponse.path("feedback").asText("No feedback provided."));
@@ -83,17 +99,13 @@ public class AIScreeningService {
     }
     
     private String extractTextFromPdf(MultipartFile file) throws IOException {
-        if (file.isEmpty()) {
-            throw new IOException("The uploaded file is empty.");
-        }
+        if (file.isEmpty()) { throw new IOException("The uploaded file is empty."); }
         byte[] fileBytes = file.getBytes();
         try (PDDocument document = Loader.loadPDF(fileBytes)) {
-            if (document.isEncrypted()) {
-                throw new IOException("The PDF file is encrypted.");
-            }
+            if (document.isEncrypted()) { throw new IOException("The PDF is encrypted."); }
             return new PDFTextStripper().getText(document);
         } catch (IOException e) {
-            throw new IOException("Could not read the PDF file. It may be corrupted.", e);
+            throw new IOException("Could not read the PDF. It may be corrupted.", e);
         }
     }
 }

@@ -6,7 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider; // <-- New Import
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -27,7 +28,6 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Inject our custom service that finds users in MongoDB
     @Autowired
     private MongoUserDetailsService userDetailsService;
     
@@ -36,12 +36,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /**
-     * THIS BEAN IS THE CORE OF THE LOGIN FIX.
-     * It creates an AuthenticationProvider that explicitly tells Spring Security
-     * to use our MongoUserDetailsService for finding users and our
-     * PasswordEncoder for checking passwords.
-     */
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
@@ -63,15 +57,10 @@ public class SecurityConfig {
         http
             .cors(withDefaults())
             .csrf(csrf -> csrf.disable())
-            // THIS LINE REGISTERS our authentication strategy with the security chain.
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
-                // Allow public access to the registration endpoint.
-                .requestMatchers("/api/auth/register").permitAll()
-                // NOTE: We do NOT need to permit /api/auth/login here,
-                // because the formLogin() filter handles it before this rule.
-                
-                // ALL OTHER requests must be authenticated.
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/auth/**").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(formLogin -> formLogin
