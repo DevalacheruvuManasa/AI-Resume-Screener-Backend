@@ -13,6 +13,10 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.session.MapSessionRepository;
+import org.springframework.session.SessionRepository;
+import org.springframework.session.config.annotation.web.http.EnableSpringHttpSession;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.DefaultCookieSerializer;
 import org.springframework.web.cors.CorsConfiguration;
@@ -21,11 +25,13 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @EnableWebSecurity
+@EnableSpringHttpSession // <-- IMPORTANT: Activates Spring Session management
 public class SecurityConfig {
 
     @Autowired
@@ -44,20 +50,36 @@ public class SecurityConfig {
         return authProvider;
     }
 
+    /**
+     * This bean is essential for making login sessions work across different subdomains.
+     */
     @Bean
     public CookieSerializer cookieSerializer() {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
-        serializer.setSameSite("None");
+        // This setting is required by modern browsers for cross-site cookies.
+        serializer.setSameSite("None"); 
+        // This ensures the cookie is only sent over secure HTTPS.
         serializer.setUseSecureCookie(true);
         return serializer;
     }
 
+    /**
+     * This bean creates a repository to store session information.
+     * We use a simple in-memory map for this project.
+     */
+    @Bean
+    public SessionRepository sessionRepository() {
+        return new MapSessionRepository(new ConcurrentHashMap<>());
+    }
+    
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .cors(withDefaults())
             .csrf(csrf -> csrf.disable())
             .authenticationProvider(authenticationProvider())
+            // Tell Spring Security to use Spring Session to manage the security context
+            .securityContext(context -> context.securityContextRepository(new HttpSessionSecurityContextRepository()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
@@ -77,7 +99,7 @@ public class SecurityConfig {
                 .logoutSuccessHandler((request, response, authentication) ->
                     response.setStatus(HttpServletResponse.SC_OK)
                 )
-                .deleteCookies("JSESSIONID")
+                .deleteCookies("SESSION") // <-- Spring Session uses 'SESSION' by default
                 .invalidateHttpSession(true)
             )
             .exceptionHandling(exceptions -> exceptions
